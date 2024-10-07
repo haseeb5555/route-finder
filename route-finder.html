@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>GraphHopper Route Example</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+      #map {
+        width: 100%;
+        height: 500px;
+        margin-top: 20px;
+        border: 1px solid #ccc;
+      }
+      form {
+        margin-bottom: 20px;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+      }
+      .btn-booking {
+        padding: 10px 20px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      #error-message {
+        color: red;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="max-width: 800px; margin: 0 auto; padding: 20px">
+      <form>
+        <div>
+          <label for="startaddr">From</label>
+          <input id="startaddr" type="text" placeholder="Your Start Address" />
+        </div>
+        <div>
+          <label for="destinationaddr">To</label>
+          <input id="destinationaddr" type="text" value="Lahore, Pakistan" />
+        </div>
+        <button class="btn-booking" type="submit">Find Route</button>
+      </form>
+      <div id="error-message"></div>
+      <div id="map"></div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const errorMessageDiv = document.getElementById("error-message");
+
+        var map = L.map("map").setView([31.5656822, 74.3141829], 10);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution:
+            'Map data © <a href="http://openstreetmap.org">OpenStreetMap</a> contributors',
+        }).addTo(map);
+
+        document.querySelector("form").addEventListener("submit", function (e) {
+          e.preventDefault();
+          errorMessageDiv.textContent = "";
+          var start = document.getElementById("startaddr").value;
+          var destination = document.getElementById("destinationaddr").value;
+
+          Promise.all([
+            fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+                start
+              )}`
+            ),
+            fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+                destination
+              )}`
+            ),
+          ])
+            .then((responses) =>
+              Promise.all(responses.map((response) => response.json()))
+            )
+            .then(([startData, destinationData]) => {
+              if (startData.length === 0 || destinationData.length === 0) {
+                throw new Error(
+                  "Couldn't find one or both locations. Please try different addresses."
+                );
+              }
+
+              var startPoint = [
+                parseFloat(startData[0].lat),
+                parseFloat(startData[0].lon),
+              ];
+              var endPoint = [
+                parseFloat(destinationData[0].lat),
+                parseFloat(destinationData[0].lon),
+              ];
+
+              return getRoute(startPoint, endPoint);
+            })
+            .catch((error) => {
+              errorMessageDiv.textContent =
+                error.message || "Error finding locations. Please try again.";
+              console.error("Error:", error);
+            });
+        });
+
+        function getRoute(startPoint, endPoint) {
+          const apiKey = "7e20caa9-6f46-49e4-92e9-3af9c608690a";
+          const baseUrl = "https://graphhopper.com/api/1/route";
+
+          let url = new URL(baseUrl);
+          url.searchParams.append("key", apiKey);
+          url.searchParams.append("point", `${startPoint[0]},${startPoint[1]}`);
+          url.searchParams.append("point", `${endPoint[0]},${endPoint[1]}`);
+          url.searchParams.append("vehicle", "car");
+          url.searchParams.append("locale", "en");
+          url.searchParams.append("calc_points", "true");
+          url.searchParams.append("points_encoded", "false");
+
+          console.log("API URL:", url.toString());
+
+          return fetch(url)
+            .then((response) => {
+              if (!response.ok) {
+                return response.text().then((text) => {
+                  throw new Error(`API Error (${response.status}): ${text}`);
+                });
+              }
+              return response.json();
+            })
+            .then((routeData) => {
+              map.eachLayer((layer) => {
+                if (layer instanceof L.Polyline || layer instanceof L.Marker) {
+                  map.removeLayer(layer);
+                }
+              });
+
+              var path = routeData.paths[0];
+              var coordinates = path.points.coordinates;
+              var latlngs = coordinates.map((point) => [point[1], point[0]]);
+
+              var polyline = L.polyline(latlngs, {
+                color: "blue",
+                weight: 5,
+              }).addTo(map);
+
+              L.marker(startPoint).addTo(map).bindPopup("Start");
+              L.marker(endPoint).addTo(map).bindPopup("Destination");
+
+              map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+
+              const distance = (path.distance / 1000).toFixed(2);
+              const time = Math.round(path.time / 60000);
+              errorMessageDiv.textContent = `Route found: ${distance} km, approximately ${time} minutes`;
+              errorMessageDiv.style.color = "green";
+            })
+            .catch((error) => {
+              errorMessageDiv.textContent = `Error finding route: ${error.message}`;
+              console.error("Detailed error:", error);
+              throw error;
+            });
+        }
+      });
+    </script>
+  </body>
+</html>
