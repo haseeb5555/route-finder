@@ -56,7 +56,7 @@ Contributions, issues, and feature requests are welcome! Feel free to check the 
 
 ## 👥 Authors
 
-- **Muhammad Haseeb** - *Initial work* - [haseeb5555](https://github.com/YourGitHubUsername)
+- **Muhammad Haseeb** - *Initial work* - [haseeb5555](https://github.com/haseeb5555)
 
 ## 🙏 Acknowledgments
 
